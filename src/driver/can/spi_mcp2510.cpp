@@ -9,6 +9,7 @@
 #include <pico/mutex.h>
 #include <pico/util/queue.h>
 #include <hardware/gpio.h>
+#include <hardware/clocks.h>
 #include "driver/can/spi_mcp2510.h"
 
 static SPISettings spi_settings(1000000, BitOrder::MSBFIRST, SPIMode::SPI_MODE0);

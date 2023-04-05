@@ -1,0 +1,84 @@
+; out: segments 8-0
+; set: digits 1-0
+; 9 LSB of Y must be 1
+; pulldowns required on segment pins
+
+; digit 0		Dig: L	A-DP: H/L
+; digit 1		Dig: H	A-DP: H/L
+; btns 0-8	    Dig: H	A-DP: I
+
+.program ioplex
+.wrap_target
+
+pull noblock                    ; pull from FIFO, or load from X
+mov x, osr                      ; save pulled value to X
+
+set pindirs, 0b1
+set pins, 0b0                   ; set Dig LOW
+out pins, 9             [31]    ; write digit0 (active high)
+nop                     [31]
+nop                     [31]
+nop                     [31]
+nop                     [31]
+nop                     [31]
+nop                     [31]
+
+set pins, 0b1                   ; set Dig HIGH
+out pins, 9             [31]    ; write digit 1 (active high)
+nop                     [31]
+nop                     [31]
+nop                     [31]
+nop                     [31]
+nop                     [31]
+nop                     [31]
+
+out pindirs, 23                 ; set segments to input
+in pins, 9                      ; read buttons  8-0 (active high)
+push noblock                    ; push button data
+mov osr, y                      ; set osr to 0xffffffff
+out pindirs, 9                  ; set segments to output
+
+.wrap
+
+% c-sdk{
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "hardware/clocks.h"
+#include "hardware/gpio.h"
+static inline void ioplex_init(PIO pio, uint sm, uint offset, uint seg_pin, uint dig_pin)
+{
+    pio_sm_config c = ioplex_program_get_default_config(offset);
+    sm_config_set_out_pins(&c, seg_pin, 9);
+    sm_config_set_set_pins(&c, dig_pin, 1);
+    sm_config_set_in_pins(&c, seg_pin);
+    float div = (float)(clock_get_hz(clk_sys) / 457000);
+    sm_config_set_clkdiv(&c, div);
+    // sm_config_set_clkdiv_int_frac(&c, 53200, 0);
+    for (int i = 0; i < 9; i++)
+    {
+        gpio_pull_down(seg_pin + i);
+    }
+
+    for (int i = 0; i < 8; i++)
+    {
+        pio_sm_exec(pio, sm, pio_encode_set(pio_y, 0xf));
+        pio_sm_exec(pio, sm, pio_encode_in(pio_y, 4));
+    }
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_y, pio_isr));
+    
+    for (int i = 0; i < 9; i++)
+    {
+        pio_gpio_init(pio, seg_pin + i);
+    }
+
+    pio_gpio_init(pio, dig_pin);
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+#ifdef __cplusplus
+};
+#endif
+
+%}
