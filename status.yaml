@@ -1,0 +1,6 @@
+core_status:
+  platform:
+    - startup
+  driver:
+    can:
+      - init_wait

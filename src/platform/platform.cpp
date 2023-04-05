@@ -20,7 +20,6 @@ void platform_init()
     SerialUSB.println("");
     SerialUSB.println("");
     log("Initializing platform...");
-
     PLATFORM_IOPLEX.setDigitNum(1);
 
     PLATFORM_CAN_SPI.begin();
