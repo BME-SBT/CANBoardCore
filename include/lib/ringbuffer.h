@@ -1,82 +1,66 @@
-#ifndef RINGBUFFER_H
-#define RINGBUFFER_H
+//
+// Created by Barrow099 on 2023. 04. 06..
+//
 
-#include <stddef.h>
-#include <optional>
+#ifndef CANBOARDCOMMON_RINGBUFFER_H
+#define CANBOARDCOMMON_RINGBUFFER_H
 
-template <typename T, size_t N>
-class StackRingBuffer
-{
+#include <cstddef>
 
-public:
-    StackRingBuffer()
-    {
-        head = buffer;
-        tail = buffer;
-        full = false;
-        last = (buffer + N);
-        empty = true;
+template <typename T, size_t N> class UnsafeRingBuffer {
+
+  public:
+    UnsafeRingBuffer(): m_size(0), m_head(m_data) {}
+
+    bool is_full() {
+        return m_size == N;
     }
 
-    bool is_empty()
-    {
-        logf("RingBuffer is empty? %d", empty);
-        return empty;
+    bool is_empty() {
+        return m_size == 0;
     }
 
-    bool is_full()
-    {
-        return full;
-    }
+    bool add(T obj, bool overwrite = false) {
+        bool full = is_full();
+        if(!full || overwrite) {
+           *m_head = obj;
+           m_size = full ? m_size : (m_size + 1);
+           size_t offset = m_head - m_data;
+           size_t new_head = (offset + 1) % N;
+           m_head = m_data + new_head;
 
-    bool push(T value)
-    {
-        if (full)
-        {
-            return false;
+           return true;
         }
-        *head = value;
-        head = advance(head);
-        if (head == tail)
-        {
-            full = true;
+        return false;
+    }
+
+    T* peek() {
+        if(is_empty()) {
+           return nullptr;
         }
-        empty = false;
+        return m_data[(get_tail() + m_size) % N];
+    }
+
+    bool pull(T* dest) {
+        if(is_empty()) {
+           return false;
+        }
+
+        *dest = m_data[get_tail()];
+        m_size--;
         return true;
     }
 
-    T get()
-    {
-        if (empty)
-        {
-            return T{};
-        }
-        T val = *tail;
-        tail = advance(tail);
-        if (tail == head)
-        {
-            empty = true;
-        }
-        return val;
+  private:
+    size_t get_tail() {
+        size_t current_head = m_head - m_data;
+        return (current_head + (N - m_size)) % N;
     }
 
-    T *advance(T *ptr)
-    {
-        T *next = ptr++;
-        if (next > last)
-        {
-            next = buffer;
-        }
-        return next;
-    }
 
-private:
-    T buffer[N];
-    T *head;
-    T *tail;
-    bool full;
-    bool empty;
-    const T *last;
+    size_t m_size;
+    T m_data[N];
+    T *m_head;
 };
 
-#endif
+#endif // CANBOARDCOMMON_RINGBUFFER_H

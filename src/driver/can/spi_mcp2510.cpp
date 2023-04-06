@@ -7,6 +7,7 @@
 #include "driver/can/spi_mcp2510.h"
 #include "driver/can/can_timing.h"
 #include "platform/platform.h"
+#include "lib/concurrent_ringbuffer.h"
 #include <hardware/gpio.h>
 #include <pico/mutex.h>
 #include <pico/util/queue.h>
