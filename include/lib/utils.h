@@ -1,6 +1,8 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include "platform/status.h"
+
 #define MAKE_NOCOPY(clazz)          \
 private:                            \
     clazz(const clazz &o) = delete; \
@@ -28,7 +30,7 @@ private:                             \
             }                                                                           \
             delay(sleep_ms);                                                            \
         }                                                                               \
-        (condition) ? 0 : STATUS_POLL_TIMEOUT;                                          \
+        (condition) ? PlatformStatus::STATUS_OK : PlatformStatus::STATUS_PLATFORM_POLL_TIMEOUT;                                          \
     })
 
 #endif

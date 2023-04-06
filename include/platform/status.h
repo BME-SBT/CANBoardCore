@@ -1,14 +1,14 @@
-// TODO: Autogenerate
-
 #ifndef STATUS_H
 #define STATUS_H
 
-#define STATUS_POLL_TIMEOUT 0x11
+#include "gen_status.h"
 
-#define STATUS_CAN_RESETWAIT 0x81
-#define STATUS_CAN_RESETFAILED 0x82
-#define STATUS_CAN_INVALIDSPEED 0x83
-#define STATUS_CAN_MODESETWAIT 0x84
-#define STATUS_CAN_BUSY 0x85
+inline bool is_err(PlatformStatus status) {
+    return status != PlatformStatus::STATUS_OK;
+}
+
+inline int statuscode(PlatformStatus status) {
+    return static_cast<int>(status);
+}
 
 #endif

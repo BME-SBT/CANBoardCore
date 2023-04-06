@@ -25,7 +25,7 @@ void global_setup() {
         g_state = AppState::FATAL;
     }
 
-    platform_set_status(0x00);
+    platform_set_status(PlatformStatus::STATUS_OK);
     g_state = AppState::USER_SETUP;
 }
 
@@ -34,8 +34,8 @@ void global_setup() {
  */
 void user_setup() {
     // User setup
-    int err = app_setup();
-    if (err) {
+    PlatformStatus err = app_setup();
+    if (is_err(err)) {
         platform_set_status(err);
         g_state = AppState::FATAL;
     } else {
@@ -47,17 +47,17 @@ void user_setup() {
  * Main loop code. Calls the app's loop, checks errors
  */
 void user_loop() {
-    static u8 last_status = 0;
+    static PlatformStatus last_status = PlatformStatus::STATUS_OK;
     static u64 last_status_print = 0;
 
-    int err = app_loop();
-    if (err) {
+    PlatformStatus err = app_loop();
+    if (is_err(err)) {
         platform_set_status(err);
         g_state = AppState::FATAL;
     }
     if (platform_status_last != last_status ||
         millis() > (last_status_print + 1000)) {
-        logf("status: %x, loop-time: %dus", platform_status_last,
+        logf("status: %x, loop-time: %dus", statuscode(platform_status_last),
              (int)g_stats.last_loop_time);
         last_status = platform_status_last;
         last_status_print = millis();
@@ -74,7 +74,7 @@ void global_error() {
     while (2) {
         delay(100);
         SerialUSB.print("HARD ERROR: ");
-        SerialUSB.print(platform_status_last, HEX);
+        SerialUSB.print(statuscode(platform_status_last), HEX);
         SerialUSB.println();
     }
 }

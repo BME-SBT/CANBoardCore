@@ -1,6 +1,8 @@
 core_status:
   platform:
-    - startup
+    - poll_timeout: Poll operation timed out
   driver:
     can:
-      - init_wait
+      - reset_wait: Waiting for CAN controller reset
+      - invalid_speed: Invalid CAN baud or oscillator requested
+      - modeset_wait: Waiting for CAN controller modeset

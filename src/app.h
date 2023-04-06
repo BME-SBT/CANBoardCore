@@ -8,9 +8,9 @@
  *
  * If it errors, the board will go into FATAL_ERROR state and will be rebooted
  * by the watchdog
- * @return 0 if success, STATUS_X for errors
+ * @return STATUS_OK if success, STATUS_X for errors
  */
-int app_setup();
+PlatformStatus app_setup();
 
 /**
  * Loop the application. Perform all periodic tasks here.
@@ -20,8 +20,8 @@ int app_setup();
  *
  * If it errors, the board will go into FATAL_ERROR state and will be rebooted
  * by the watchdog.
- * @return 0 if success, STATUS_X for errors
+ * @return STATUS_OK if success, STATUS_X for errors
  */
-int app_loop();
+PlatformStatus app_loop();
 
 #endif
