@@ -1,15 +1,17 @@
 #ifndef CAN_H
 #define CAN_H
 
+#include "canstat.h"
+#include "driver/can/canpriorityqueue.h"
 #include "spi_mcp2510.h"
 
 #define CAN_QUEUED 0xff
-#define CAN_QUEUE_FULL 0xfc
+#define CAN_DROPPED 0xfe
 
 class CAN
 {
 public:
-    CAN() : failed(true), has_frame(false)
+    CAN() : m_driver(nullptr), failed(true), has_frame(false)
     {
     }
 
@@ -32,9 +34,10 @@ public:
 private:
     Priv *m_driver;
     bool failed;
-    CAN_Frame current_frame;
+    CAN_Frame current_frame{};
     bool has_frame;
-    queue_t tx_queue;
+    // In theory, IRQ can send CAN frames
+    PriorityAgeQueue<CAN_Frame, 16> m_queue;
 };
 
 #endif

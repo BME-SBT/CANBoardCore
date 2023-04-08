@@ -7,7 +7,7 @@
 #include "driver/can/spi_mcp2510.h"
 #include "driver/can/can_timing.h"
 #include "platform/platform.h"
-#include "lib/concurrent_ringbuffer.h"
+#include "driver/can/canstat.h"
 #include <hardware/gpio.h>
 #include <pico/mutex.h>
 #include <pico/util/queue.h>
@@ -135,7 +135,11 @@ static void mcp251x_hw_rx(Priv *priv, int rxb) {
         memcpy(skb.data, buf + RXBDAT_OFF, skb.dlc);
     }
 
-    queue_try_add(&priv->can_rx_queue, &skb);
+    if(priv->can_rx_queue.add(skb, true)) {
+        g_can_stat.rx_received_frame_count++;
+    }else {
+        g_can_stat.rx_dropped_frame_count++;
+    }
 }
 
 static void mcp251x_hw_tx_frame(Priv *priv, u8 *buf, int len, int txb) {
@@ -213,7 +217,7 @@ static void mcp251x_can_isr(void *device) {
 
                 // reset INTF
                 mcp251x_write_bits(priv, CANINTF, CANINTF_RX0IF, 0);
-
+                intf ^= CANINTF_RX0IF;
                 if (!(intf & CANINTF_RX1IF)) {
                     // reread intf, rx1 could be full now
                     u8 intf1, eflag1;
@@ -257,6 +261,7 @@ static void mcp251x_can_isr(void *device) {
 
             if (intf & CANINTF_TX) {
                 priv->tx_busy = false;
+                g_can_stat.tx_sent_frame_count++;
             }
             mcp251x_write_reg(priv, CANINTF, 0);
             break;
@@ -266,6 +271,7 @@ static void mcp251x_can_isr(void *device) {
     } else {
         // we cannot handle the rx frame, the transmit function will handle it
         // later
+        g_can_stat.isr_lost_race_count++;
     }
 }
 
@@ -326,7 +332,6 @@ Priv *mcp251x_platform_init(int clock_freq, int baudrate) {
     Priv *instance = new Priv;
     instance->tx_busy = false;
     mutex_init(&instance->mcp_lock);
-    queue_init(&instance->can_rx_queue, sizeof(CAN_Frame), CAN_RX_QUEUE_LEN);
     memset(instance->spi_tx_buf, 0, SPI_TRANSFER_BUF_LEN);
     memset(instance->spi_rx_buf, 0, SPI_TRANSFER_BUF_LEN);
 

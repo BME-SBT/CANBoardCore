@@ -2,17 +2,19 @@
 #define SPI_MCP2510_H
 
 /*
- * This driver is based on the mcp251x.c driver from Linux and uses raw pico-sdk SPI access.
+ * This driver is based on the mcp251x.c driver from Linux and uses raw pico-sdk
+ * SPI access.
  *
  * This is both an SPI and a CAN driver
  */
+#include "../../lib/inttypes.h"
 #include "can_timing.h"
+#include "lib/ringbuffer.h"
+#include <cstring>
+#include <hardware/gpio.h>
 #include <hardware/spi.h>
 #include <pico/mutex.h>
 #include <pico/util/queue.h>
-#include <hardware/gpio.h>
-#include "../../lib/inttypes.h"
-#include <cstring>
 
 #define CAN_BUSY 0xfe
 
@@ -165,25 +167,8 @@
 
 #define SPI_TRANSFER_BUF_LEN (6 + 8)
 
-#define ERR_SPI_WRITE_FAILED -1
-
-/**
- * Private instance data for the driver
- */
-struct Priv
-{
-    mutex_t mcp_lock;
-    u8 spi_tx_buf[SPI_TRANSFER_BUF_LEN];
-    u8 spi_rx_buf[SPI_TRANSFER_BUF_LEN];
-    spi_inst_t *spi;
-    bool tx_busy;
-    queue_t can_rx_queue;
-};
-
-struct CAN_Frame
-{
-    union
-    {
+struct CAN_Frame {
+    union {
         u16 standard_id;
         u32 extended_id;
     };
@@ -194,13 +179,28 @@ struct CAN_Frame
 
     CAN_Frame() = default;
 
-    CAN_Frame(u16 sid, u8 *data, u8 dlc)
-    {
+    CAN_Frame(u16 sid, u8 *data, u8 dlc) {
         this->standard_id = sid;
         memcpy(this->data, data, dlc);
         this->dlc = dlc;
     }
+
+    u32 priority() const { return extended ? extended_id : standard_id; }
 };
+
+/**
+ * Private instance data for the driver
+ */
+struct Priv {
+    mutex_t mcp_lock;
+    u8 spi_tx_buf[SPI_TRANSFER_BUF_LEN];
+    u8 spi_rx_buf[SPI_TRANSFER_BUF_LEN];
+    spi_inst_t *spi;
+    bool tx_busy;
+    UnsafeRingBuffer<CAN_Frame, 16> can_rx_queue;
+};
+
+
 
 int mcp251x_start_tx(Priv *priv, CAN_Frame &frame);
 Priv *mcp251x_platform_init(int clock_freq, int baudrate);
