@@ -7,8 +7,8 @@ CAN_Stat g_can_stat{};
 
 bool CAN::init()
 {
-    m_driver = mcp251x_platform_init(PLATFORM_CAN_OSCILLATOR, PLATFORM_CAN_BAUD);
-    if (!m_driver)
+    Priv *result = mcp251x_platform_init(PLATFORM_CAN_OSCILLATOR, PLATFORM_CAN_BAUD, &m_driver);
+    if (!result)
     {
         failed = true;
     }
@@ -28,7 +28,7 @@ bool CAN::available()
 int CAN::send(CAN_Frame frame)
 {
 
-    int err = mcp251x_start_tx(m_driver, frame);
+    int err = mcp251x_start_tx(&m_driver, frame);
     if (err == CAN_BUSY)
     {
         // overwrite the last one, newer frames are always prioritized
@@ -55,7 +55,7 @@ int CAN::transmit_tick()
     CAN_Frame *frame;
     while ((frame = m_queue.peek()) != nullptr)
     {
-        int err = mcp251x_start_tx(m_driver, *frame);
+        int err = mcp251x_start_tx(&m_driver, *frame);
         if (!err)
         {
             m_queue.pull(nullptr);

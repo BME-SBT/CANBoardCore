@@ -6,3 +6,5 @@ core_status:
       - reset_wait: Waiting for CAN controller reset
       - invalid_speed: Invalid CAN baud or oscillator requested
       - modeset_wait: Waiting for CAN controller modeset
+      - init_failed: Failed to initializ CAN controller
+      - config_failed: Failed to configure CAN controller

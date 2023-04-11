@@ -11,7 +11,7 @@
 class CAN
 {
 public:
-    CAN() : m_driver(nullptr), failed(true), has_frame(false)
+    CAN() : m_driver(), failed(true), has_frame(false)
     {
     }
 
@@ -32,7 +32,7 @@ public:
     int transmit_tick();
 
 private:
-    Priv *m_driver;
+    Priv m_driver;
     bool failed;
     CAN_Frame current_frame{};
     bool has_frame;

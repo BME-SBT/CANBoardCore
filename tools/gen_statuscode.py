@@ -155,7 +155,7 @@ static const struct
 {1}   
 }};
 inline const char* status_lookup_code(u8 code) {{ 
-    for(int i = 0; i < sizeof(status_name_map); i++) {{
+    for(unsigned int i = 0; i < sizeof(status_name_map); i++) {{
         auto& item = status_name_map[i];
         if(item.statuscode == code) {{
             return item.name;
@@ -175,7 +175,7 @@ inline const char* status_lookup_code(u8 code) {{ return "<not supported>"; }}
     for statuscode, item in statuses.items():
         enum_items.append(f"    {item[0]} = {hex(statuscode)}")
         name = item[0] if len(item[0]) < 32 else item[0][:32]
-        status_name_map_items.append(f"    {{ {statuscode}, \"{name}\" }}")
+        status_name_map_items.append(f"    {{ {hex(statuscode)}, \"{name}\" }}")
 
     enum_text = ',\n'.join(enum_items)
     map_text = ',\n'.join(status_name_map_items)

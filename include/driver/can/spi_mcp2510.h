@@ -10,6 +10,7 @@
 #include "../../lib/inttypes.h"
 #include "can_timing.h"
 #include "lib/ringbuffer.h"
+#include <critical_section.h>
 #include <cstring>
 #include <hardware/gpio.h>
 #include <hardware/spi.h>
@@ -195,14 +196,14 @@ struct Priv {
     mutex_t mcp_lock;
     u8 spi_tx_buf[SPI_TRANSFER_BUF_LEN];
     u8 spi_rx_buf[SPI_TRANSFER_BUF_LEN];
-    spi_inst_t *spi;
-    bool tx_busy;
+    bool tx_busy = false;
+    bool in_irq = false;
     UnsafeRingBuffer<CAN_Frame, 16> can_rx_queue;
 };
 
 
 
 int mcp251x_start_tx(Priv *priv, CAN_Frame &frame);
-Priv *mcp251x_platform_init(int clock_freq, int baudrate);
+Priv *mcp251x_platform_init(int clock_freq, int baudrate, Priv *out);
 
 #endif

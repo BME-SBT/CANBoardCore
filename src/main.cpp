@@ -19,9 +19,10 @@ static AppState g_state = AppState::SETUP;
  */
 void global_setup() {
     // Global setup
-    bool err = PLATFORM_CAN.init();
-    if (err) {
-        g_state = AppState::FATAL;
+    bool err = true;
+    while(err) {
+        log("initializing CAN");
+        err =  PLATFORM_CAN.init();
     }
 
     platform_set_status(PlatformStatus::STATUS_OK);
@@ -54,27 +55,46 @@ void user_loop() {
         platform_set_status(err);
         g_state = AppState::FATAL;
     }
-    if (platform_status_last != last_status ||
+    if (platform_status != last_status ||
         millis() > (last_status_print + 1000)) {
-        logf("status: %x, loop-time: %dus", statuscode(platform_status_last),
+        logf("status: %x, loop-time: %dus", statuscode(platform_status),
              (int)g_stats.last_loop_time);
-        last_status = platform_status_last;
+        last_status = platform_status;
         last_status_print = millis();
     }
 }
 
+
+extern UnsafeRingBuffer<PlatformStatus, 6> g_status_stack;
 /**
  * Global error state. The board has crashed, waiting for watchdog restart
  */
-void global_error() {
+[[noreturn]] void global_error() {
     // TODO: Log error if possible
 
+    PlatformStatus status_stack[6];
+    memset(status_stack, 0, sizeof(PlatformStatus) * 6);
+    g_status_stack.get_all(status_stack);
     // This blocks as the execution cannot continue
-    while (2) {
-        delay(100);
-        SerialUSB.print("HARD ERROR: ");
-        SerialUSB.print(statuscode(platform_status_last), HEX);
+    while (true) {
+        delay(1000);
+        SerialUSB.print("\n\nHARD ERROR: ");
+        SerialUSB.print(statuscode(platform_status), HEX);
+        SerialUSB.print("(");
+        SerialUSB.print(statusname(platform_status));
+        SerialUSB.print(")");
         SerialUSB.println();
+        SerialUSB.println("Error stack: ");
+        for(auto &st : status_stack) {
+            if(st != PlatformStatus::STATUS_OK) {
+                SerialUSB.print("\t0x");
+                SerialUSB.print(statuscode(st), HEX);
+                SerialUSB.print("(");
+                SerialUSB.print(statusname(st));
+                SerialUSB.print(")");
+                SerialUSB.println();
+            }
+        }
     }
 }
 

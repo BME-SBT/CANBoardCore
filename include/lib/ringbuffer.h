@@ -76,14 +76,24 @@ template <typename T, size_t N> class UnsafeRingBuffer {
         return true;
     }
 
+    void clear() {
+        m_size = 0;
+    }
+
+    void get_all(T *buffer) {
+        for(int i = 0; i < m_size; i++) {
+            buffer[i] = m_data[((get_tail() % N) + i) % N];
+        }
+    }
+
   private:
-    size_t get_tail() {
-        size_t current_head = m_head - m_data;
+    int get_tail() {
+        int current_head = m_head - m_data;
         return (current_head + (N - m_size)) % N;
     }
 
 
-    size_t m_size;
+    int m_size;
     T m_data[N];
     T *m_head;
 };
