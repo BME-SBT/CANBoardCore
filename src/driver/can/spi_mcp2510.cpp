@@ -5,14 +5,19 @@
  * This is both an SPI and a CAN driver
  */
 #include "driver/can/spi_mcp2510.h"
-#include "driver/can/can_timing.h"
-#include "driver/can/canstat.h"
-#include "platform/platform.h"
+#include "lib/performance_timer.h"
 #include "PinMap.h"
 #include "PeripheralPins.h"
 
+#include "driver/can/can_timing.h"
+#include "driver/can/canstat.h"
+
+#include "platform/platform.h"
+
 #include <hardware/gpio.h>
 #include <pico/mutex.h>
+
+static const bool DEBUG_REGS = false;
 
 static void mcp251x_can_isr(void *device);
 
@@ -36,14 +41,14 @@ static int mcp251x_read_reg(Priv *priv, u8 reg) {
     priv->spi_tx_buf[1] = reg;
     mcp251x_spi_transfer(priv, 3);
     if(!priv->in_irq) {
-        logf("mcp251x_read_reg: reading %x = %x",reg, priv->spi_rx_buf[2]);
+        logf_if(DEBUG_REGS, "mcp251x_read_reg: reading %x = %x",reg, priv->spi_rx_buf[2]);
     }
     return priv->spi_rx_buf[2];
 }
 
 static void mcp251x_write_reg(Priv *priv, u8 reg, u8 value) {
     if(!priv->in_irq) {
-        logf("mcp251x_write_reg: writing %x = %x",reg, value);
+        logf_if(DEBUG_REGS, "mcp251x_write_reg: writing %x = %x",reg, value);
     }
     priv->spi_tx_buf[0] = INSTRUCTION_WRITE;
     priv->spi_tx_buf[1] = reg;
@@ -134,7 +139,7 @@ static void mcp251x_hw_rx(Priv *priv, int rxb) {
     if (!(skb.rtr)) {
         memcpy(skb.data, buf + RXBDAT_OFF, skb.dlc);
     }
-
+    g_can_stat.rx_byte_count += skb.dlc;
     if(priv->can_rx_queue.add(skb, true)) {
         g_can_stat.rx_received_frame_count++;
     }else {
@@ -143,10 +148,11 @@ static void mcp251x_hw_rx(Priv *priv, int rxb) {
 }
 
 static void mcp251x_hw_tx_frame(Priv *priv, u8 *buf, int len, int txb) {
-    int i;
+    memcpy(priv->spi_tx_buf + 1, buf, SPI_TRANSFER_BUF_LEN);
+    priv->spi_tx_buf[0] = INSTRUCTION_WRITE;
+    priv->spi_tx_buf[1] = TXBCTRL(txb) + TXBSIDH_OFF;
 
-    for (i = 1; i < TXBDAT_OFF + len; i++)
-        mcp251x_write_reg(priv, TXBCTRL(txb) + i, buf[i]);
+    mcp251x_spi_write(priv, TXBDAT_OFF + len);
 }
 
 static void mcp251x_hw_tx(Priv *priv, const CAN_Frame &frame, int txb) {
@@ -171,25 +177,28 @@ static void mcp251x_hw_tx(Priv *priv, const CAN_Frame &frame, int txb) {
     buf[TXBDLC_OFF] = (rtr << DLC_RTR_SHIFT) | frame.dlc;
     memcpy(buf + TXBDAT_OFF, frame.data, frame.dlc);
     mcp251x_hw_tx_frame(priv, buf, frame.dlc, txb);
-
+    g_can_stat.tx_byte_count += frame.dlc;
     /* use INSTRUCTION_RTS, to avoid "repeated frame problem" */
     priv->spi_tx_buf[0] = INSTRUCTION_RTS(1 << txb);
     mcp251x_spi_write(priv, 1);
 }
 
-int mcp251x_start_tx(Priv *priv, CAN_Frame &frame) {
+int mcp251x_start_tx(Priv *priv, CAN_Frame &frame, bool blocking) {
     // wait for transmit slot
 
     if (priv->tx_busy) {
         return CAN_BUSY;
     }
 
-    if(!mutex_enter_timeout_ms(&priv->mcp_lock,500)) {
-        return CAN_BUSY;
-    };
-
+    if(blocking) {
+        mutex_enter_blocking(&priv->mcp_lock);
+    }else {
+        if(!mutex_try_enter(&priv->mcp_lock, nullptr)) {
+            return CAN_BUSY;
+        }
+    }
     if (frame.dlc > 8) {
-        frame.dlc = 0;
+        frame.dlc = 8;
     }
 
     mcp251x_hw_tx(priv, frame, 1);
@@ -204,20 +213,19 @@ int mcp251x_start_tx(Priv *priv, CAN_Frame &frame) {
 }
 
 static void mcp251x_can_isr(void *device) {
+    g_can_stat.irq_handled++;
     Priv *priv = reinterpret_cast<Priv *>(device);
 
-    irqlogf("mutex: %p, %d %p", &priv->mcp_lock, priv->mcp_lock.owner, priv->mcp_lock.core.spin_lock);
+    irqlog("CAN interrupt happened");
     if (mutex_try_enter(&priv->mcp_lock, nullptr)) {
         priv->in_irq = true;
-        irqlogf("mutex: %p, %d %p", &priv->mcp_lock, priv->mcp_lock.owner, priv->mcp_lock.core.spin_lock);
         while (true) {
             u8 intf, eflag;
 
             intf = mcp251x_read_reg(priv, CANINTF);
-
-            mcp251x_write_reg(priv, CANINTF, 0);
+            irqlogf("interrupt flag: %x", intf);
             eflag = mcp251x_read_reg(priv, EFLG);
-
+            irqlogf("error flag: %x", eflag);
             // first, check for messages
             if (intf & CANINTF_RX0IF) {
                 // message in the first buffer
@@ -258,8 +266,6 @@ static void mcp251x_can_isr(void *device) {
                 // clear error state
                 mcp251x_write_bits(priv, EFLG, eflag, 0);
             }
-            irqlogf("priv is: %p", priv);
-            irqlogf("lock is: %p", &priv->mcp_lock);
 
 
             // TODO: Handle errors
@@ -276,15 +282,13 @@ static void mcp251x_can_isr(void *device) {
             }
             mcp251x_write_reg(priv, CANINTF, 0);
         }
-        irqlogf("mi a fasz %d", 0);
-        irqlogf("mutex: %p, %d %p", &priv->mcp_lock, priv->mcp_lock.owner, priv->mcp_lock.core.spin_lock);
-        irqlogf("spinL: %p %d", priv->mcp_lock.core.spin_lock, is_spin_locked(priv->mcp_lock.core.spin_lock));
+
         mutex_exit(&priv->mcp_lock);
-        irqlogf("spinL: %p %d", priv->mcp_lock.core.spin_lock, is_spin_locked(priv->mcp_lock.core.spin_lock));
         priv->in_irq = false;
         return ;
 
     } else {
+        irqlog("cannot access SPI :(");
         // we cannot handle the rx frame, the transmit function will handle it
         // later
         g_can_stat.isr_lost_race_count++;
@@ -321,7 +325,7 @@ static PlatformStatus mcp251x_set_normal_mode(Priv *priv) {
                           CANINTE_TX0IE | CANINTE_RX1IE | CANINTE_RX0IE);
 
     /* Put device into normal mode */
-    mcp251x_write_reg(priv, CANCTRL, CANCTRL_REQOP_NORMAL);
+    mcp251x_write_reg(priv, CANCTRL, CANCTRL_REQOP_LOOPBACK);
 
     // set normalmode
     u8 value = 0;
@@ -330,7 +334,7 @@ static PlatformStatus mcp251x_set_normal_mode(Priv *priv) {
                                                        // reset, we cannot
                                                        // proceed without CAN
     TRY(read_poll_timeout_blocking(mcp251x_read_stat, value,
-                                     value == CANCTRL_REQOP_NORMAL, 1000, 10,
+                                     value == CANCTRL_REQOP_LOOPBACK, 1000, 10,
                                      priv));
 
 
@@ -358,12 +362,10 @@ Priv *mcp251x_platform_init(int clock_freq, int baudrate, Priv *instance) {
     }
     instance->tx_busy = false;
     mutex_init(&instance->mcp_lock);
-    logf("mutex: %p, %d %p", &instance->mcp_lock, instance->mcp_lock.owner, instance->mcp_lock.core.spin_lock);
     memset(instance->spi_tx_buf, 0, SPI_TRANSFER_BUF_LEN);
     memset(instance->spi_rx_buf, 0, SPI_TRANSFER_BUF_LEN);
 
     mutex_enter_blocking(&instance->mcp_lock);
-    logf("mutex: %p, %d %p", &instance->mcp_lock, instance->mcp_lock.owner, instance->mcp_lock.core.spin_lock);
     // reset device
 
     PlatformStatus ret = mcp251x_reset(instance);

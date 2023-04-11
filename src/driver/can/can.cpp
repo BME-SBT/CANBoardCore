@@ -1,6 +1,7 @@
 #include "driver/can/can.h"
 #include "driver/can/canstat.h"
 #include "driver/can/spi_mcp2510.h"
+#include "lib/performance_timer.h"
 #include "platform/platform.h"
 
 CAN_Stat g_can_stat{};
@@ -19,8 +20,8 @@ bool CAN::init()
 
 bool CAN::available()
 {
-
-    has_frame = m_queue.pull(&this->current_frame);
+    log("checking frames");
+    has_frame = m_driver.can_rx_queue.pull(&this->current_frame);
     if(has_frame){
         g_can_stat.rx_processed_frame_count++;
     }
@@ -30,7 +31,7 @@ bool CAN::available()
 int CAN::send(CAN_Frame frame)
 {
 
-    int err = mcp251x_start_tx(&m_driver, frame);
+    int err = mcp251x_start_tx(&m_driver, frame, true);
     if (err == CAN_BUSY)
     {
         // overwrite the last one, newer frames are always prioritized
@@ -57,7 +58,8 @@ int CAN::transmit_tick()
     CAN_Frame *frame;
     while ((frame = m_queue.peek()) != nullptr)
     {
-        int err = mcp251x_start_tx(&m_driver, *frame);
+
+        int err = mcp251x_start_tx(&m_driver, *frame, false);
         if (!err)
         {
             m_queue.pull(nullptr);

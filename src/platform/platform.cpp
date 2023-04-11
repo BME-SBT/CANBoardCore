@@ -1,8 +1,8 @@
 #include "platform/platform.h"
 #include "driver/ioplex/ioplex_driver.h"
+#include "lib/performance_timer.h"
 #include "platform/log.h"
 #include <hardware/watchdog.h>
-
 
 /*
  * Hardware driver instances
@@ -23,7 +23,7 @@ void platform_init() {
     SerialUSB.println("");
     SerialUSB.println("");
 
-    memset(irq_logbuf, 0,LOG_IRQ_PRINTF_SIZE);
+    log_init();
     for(int i = 0; i < 6; i++) {
         g_status_stack.add(PlatformStatus::STATUS_OK);
     }
@@ -46,11 +46,17 @@ void platform_init() {
 
 void platform_preloop() {}
 void platform_postloop() {
-
-    // print IRQ log
     afterirq_log();
+
+    PLATFORM_CAN.transmit_tick();
+
+    //schedule_call(print_can_stats, 1000);
     // finally, reset the watchdog
     watchdog_update();
+}
+
+void platform_yield() {
+    PLATFORM_CAN.transmit_tick();
 }
 
 

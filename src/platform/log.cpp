@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "platform/log.h"
 
+#if LOG_ENABLED
 char printf_buffer[LOG_PRINTF_BUF_SIZE];
 char irq_printf_buffer1[LOG_PRINTF_BUF_SIZE];
 char irq_printf_buffer2[LOG_PRINTF_BUF_SIZE+7];
@@ -13,3 +14,4 @@ void afterirq_log() {
         irq_logbuf[0] = 0;
     }
 }
+#endif

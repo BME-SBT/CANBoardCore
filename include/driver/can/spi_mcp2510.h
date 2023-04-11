@@ -203,7 +203,7 @@ struct Priv {
 
 
 
-int mcp251x_start_tx(Priv *priv, CAN_Frame &frame);
+int mcp251x_start_tx(Priv *priv, CAN_Frame &frame, bool blocking = true);
 Priv *mcp251x_platform_init(int clock_freq, int baudrate, Priv *out);
 
 #endif

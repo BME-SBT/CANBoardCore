@@ -40,3 +40,10 @@
         }                                                                      \
     } while (0)
 #endif
+
+#define schedule_call(fn, period) \
+    static u64 fn##_last_called = 0; \
+    if(millis() > fn##_last_called + period) { \
+        fn();                     \
+        fn##_last_called = millis();                              \
+    }

@@ -12,7 +12,7 @@
  * Pinout, hardware config
  */
 #define PLATFORM_PIN_SPI_SCK 2
-#define PLATFORM_CAN_SPI_BAUD 1000000    // 1 MHz
+#define PLATFORM_CAN_SPI_BAUD 5E6    // 1 MHz
 #define PLATFORM_CAN_OSCILLATOR 16E6 // 16 MHz
 #define PLATFORM_CAN_BAUD 500E3      // 500 kHZ
 #define PLATFORM_PIN_SPI_MOSI 3
@@ -33,6 +33,7 @@ void platform_set_status(PlatformStatus status);
 
 void platform_preloop();
 void platform_postloop();
+void platform_yield();
 
 extern PlatformStatus platform_status;
 
