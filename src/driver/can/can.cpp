@@ -7,7 +7,9 @@ CAN_Stat g_can_stat{};
 
 bool CAN::init()
 {
+    failed = false;
     Priv *result = mcp251x_platform_init(PLATFORM_CAN_OSCILLATOR, PLATFORM_CAN_BAUD, &m_driver);
+    logf("got back %p", result);
     if (!result)
     {
         failed = true;

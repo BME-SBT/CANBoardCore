@@ -23,6 +23,7 @@ void global_setup() {
     while(err) {
         log("initializing CAN");
         err =  PLATFORM_CAN.init();
+        delay(1000);
     }
 
     platform_set_status(PlatformStatus::STATUS_OK);

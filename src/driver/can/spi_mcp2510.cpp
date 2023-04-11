@@ -310,15 +310,6 @@ static PlatformStatus mcp251x_set_bittiming(Priv *priv, int clock_freq,
     mcp251x_write_reg(priv, CNF2, cnf[1]);
     mcp251x_write_reg(priv, CNF3, cnf[2]);
 
-    u8 cnf1,cnf2, cnf3;
-    cnf1 = mcp251x_read_reg(priv, CNF1);
-    cnf2 = mcp251x_read_reg(priv, CNF2);
-    cnf3 = mcp251x_read_reg(priv, CNF3);
-
-    if(cnf1 != cnf[0] || cnf2 != cnf[1] || cnf3 != cnf[2]) {
-        logf("invalid config read: %d %d %d instead off %d %d %d", cnf1, cnf2, cnf3, cnf[0], cnf[1], cnf[2]);
-        return PlatformStatus::STATUS_DRIVER_CAN_CONFIG_FAILED;
-    }
 
     return PlatformStatus::STATUS_OK;
 }
@@ -391,6 +382,7 @@ Priv *mcp251x_platform_init(int clock_freq, int baudrate, Priv *instance) {
 
     ret = mcp251x_set_normal_mode(instance);
     platform_set_status(ret);
+    logf("modeset result: %d", statuscode(ret));
     if (is_err(ret)) {
         goto retnull;
     }
