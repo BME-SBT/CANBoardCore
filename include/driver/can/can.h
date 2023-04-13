@@ -4,6 +4,7 @@
 #include "canstat.h"
 #include "driver/can/canpriorityqueue.h"
 #include "spi_mcp2510.h"
+#include "can_frame.h"
 
 #define CAN_QUEUED 0xff
 #define CAN_DROPPED 0xfe
@@ -37,7 +38,6 @@ private:
     CAN_Frame current_frame{};
     bool has_frame;
     // In theory, IRQ can send CAN frames
-    PriorityAgeQueue<CAN_Frame, 16> m_queue;
 };
 
 #endif

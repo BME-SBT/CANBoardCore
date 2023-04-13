@@ -45,8 +45,8 @@ const uint8_t digits[16] = {
 };
 
 // LEDs
-#define LED1 0x100
-#define LED2 0x80000000
+#define LED_1 0x100
+#define LED_2 0x80000000
 
 // Buttons
 #define BTN 0x80000000
@@ -102,10 +102,10 @@ private:
     state |= (m_digit2 < 16 ? digits[m_digit2] : 0) << 9;
 
     // Led 1
-    state |= m_led1 ? LED1 : 0;
+    state |= m_led1 ? LED_1 : 0;
 
     // Led 2
-    state |= m_led2 ? LED2 : 0;
+    state |= m_led2 ? LED_2 : 0;
 
     pio_sm_put(m_pio, m_stateMachine, state);
   }

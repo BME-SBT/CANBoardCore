@@ -6,8 +6,11 @@
 #define LOG_IRQ_PRINTF_SIZE 1024
 
 #if LOG_ENABLED
-#include <string.h>
-#define __FNAME__                                                              \
+
+#include <Arduino.h>
+#include <cstdio>
+#include <cstring>
+#define __FILENAME__                                                           \
     (strrchr(__FILE__, '/') ? (strrchr(__FILE__, '/') + 1) : __FILE__)
 
 extern char printf_buffer[LOG_PRINTF_BUF_SIZE];
@@ -17,24 +20,25 @@ extern char irq_logbuf[LOG_IRQ_PRINTF_SIZE];
 
 void afterirq_log();
 
-#define log(msg)                                                               \
+#define LOG(msg)                                                               \
     do {                                                                       \
         SerialUSB.print("[");                                                  \
         SerialUSB.print(millis() / 1000.0);                                    \
         SerialUSB.print("] ");                                                 \
-        SerialUSB.print(__FNAME__);                                            \
+        SerialUSB.print(__FILENAME__);                                         \
         SerialUSB.print(":");                                                  \
         SerialUSB.print(__LINE__);                                             \
         SerialUSB.print(": ");                                                 \
         SerialUSB.println(msg);                                                \
     } while (0)
-#define logf(format, args...)                                                  \
+
+#define LOGF(format, args...)                                                  \
     do {                                                                       \
         snprintf(printf_buffer, LOG_PRINTF_BUF_SIZE, format, args);            \
-        log(printf_buffer);                                                    \
+        LOG(printf_buffer);                                                    \
     } while (0)
 
-#define irqlogf(format, args...)                                               \
+#define IRQ_LOGF(format, args...)                                              \
     do {                                                                       \
         snprintf(irq_printf_buffer1, LOG_PRINTF_BUF_SIZE, format, args);       \
         snprintf(irq_printf_buffer2, LOG_PRINTF_BUF_SIZE + 7, "IRQ: %s\r\n",   \
@@ -43,7 +47,7 @@ void afterirq_log();
         strncat(irq_logbuf, irq_printf_buffer2, LOG_IRQ_PRINTF_SIZE - csize);  \
     } while (0)
 
-#define irqlog(message)                                                        \
+#define IRQ_LOG(message)                                                       \
     do {                                                                       \
         snprintf(irq_printf_buffer2, LOG_PRINTF_BUF_SIZE + 7, "IRQ: %s\r\n",   \
                  message);                                                     \
@@ -51,26 +55,27 @@ void afterirq_log();
         strncat(irq_logbuf, irq_printf_buffer2, LOG_IRQ_PRINTF_SIZE - csize);  \
     } while (0)
 
-#define log_if(flag, msg)                                                      \
+#define LOG_IF(flag, msg)                                                      \
     do {                                                                       \
         if (flag)                                                              \
-            log(msg);                                                          \
+            LOG(msg);                                                          \
     } while (0)
 
-#define logf_if(flag, format, args...)                                         \
+#define LOGF_IF(flag, format, args...)                                         \
     do {                                                                       \
         if (flag)                                                              \
-            logf(format, args);                                                \
+            LOGF(format, args);                                                \
     } while (0)
-#define log_init()  memset(irq_logbuf, 0,LOG_IRQ_PRINTF_SIZE)
+
+#define LOG_INIT() memset(irq_logbuf, 0, LOG_IRQ_PRINTF_SIZE)
 #else
-#define log(msg)
-#define logf(fmt, args...)
-#define irqlog(msg)
-#define irqlogf(fmt, args...)
-#define log_if(flag, msg)
-#define logf_if(flag, fmt, args...)
-#define log_init()
+#define LOG(msg)
+#define LOGF(fmt, args...)
+#define IRQ_LOG(msg)
+#define IRQ_LOGF(fmt, args...)
+#define LOG_IF(flag, msg)
+#define LOGF_IF(flag, fmt, args...)
+#define LOG_INIT()
 inline void afterirq_log() {}
 #endif
 

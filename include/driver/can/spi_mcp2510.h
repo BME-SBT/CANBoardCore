@@ -9,6 +9,7 @@
  */
 #include "../../lib/inttypes.h"
 #include "can_timing.h"
+#include "canpriorityqueue.h"
 #include "lib/ringbuffer.h"
 #include <critical_section.h>
 #include <cstring>
@@ -16,6 +17,7 @@
 #include <hardware/spi.h>
 #include <pico/mutex.h>
 #include <pico/util/queue.h>
+#include "can_frame.h"
 
 #define CAN_BUSY 0xfe
 
@@ -168,26 +170,6 @@
 
 #define SPI_TRANSFER_BUF_LEN (6 + 8)
 
-struct CAN_Frame {
-    union {
-        u16 standard_id;
-        u32 extended_id;
-    };
-    bool rtr;
-    bool extended;
-    u8 dlc;
-    u8 data[8];
-
-    CAN_Frame() = default;
-
-    CAN_Frame(u16 sid, u8 *data, u8 dlc) {
-        this->standard_id = sid;
-        memcpy(this->data, data, dlc);
-        this->dlc = dlc;
-    }
-
-    u32 priority() const { return extended ? extended_id : standard_id; }
-};
 
 /**
  * Private instance data for the driver
@@ -196,14 +178,20 @@ struct Priv {
     mutex_t mcp_lock;
     u8 spi_tx_buf[SPI_TRANSFER_BUF_LEN];
     u8 spi_rx_buf[SPI_TRANSFER_BUF_LEN];
-    bool tx_busy = false;
+    bool tx1_busy = false;
+    bool tx0_busy = false;
     bool in_irq = false;
-    UnsafeRingBuffer<CAN_Frame, 16> can_rx_queue;
+    UnsafeRingBuffer<CAN_Frame, 32> can_rx_queue;
+    CANPriorityQueue can_tx_queue;
+
+    Priv(): can_tx_queue(2) {
+
+    }
 };
 
 
 
-int mcp251x_start_tx(Priv *priv, CAN_Frame &frame, bool blocking = true);
+int mcp251x_start_tx(Priv *priv, CAN_Frame &frame);
 Priv *mcp251x_platform_init(int clock_freq, int baudrate, Priv *out);
 
 #endif

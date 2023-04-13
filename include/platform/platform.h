@@ -1,12 +1,12 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#include <Arduino.h>
-#include "../lib/utils.h"
-#include "../lib/inttypes.h"
-#include "status.h"
 #include "log.h"
 #include "../driver/can/can.h"
+#include "../lib/inttypes.h"
+#include "../lib/utils.h"
+#include "status.h"
+
 
 /*
  * Pinout, hardware config
@@ -14,7 +14,7 @@
 #define PLATFORM_PIN_SPI_SCK 2
 #define PLATFORM_CAN_SPI_BAUD 5E6    // 1 MHz
 #define PLATFORM_CAN_OSCILLATOR 16E6 // 16 MHz
-#define PLATFORM_CAN_BAUD 500E3      // 500 kHZ
+#define PLATFORM_CAN_BAUD 1E6      // 500 kHZ
 #define PLATFORM_PIN_SPI_MOSI 3
 #define PLATFORM_PIN_SPI_MISO 4
 #define PLATFORM_PIN_CAN_CS 5

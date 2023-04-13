@@ -23,7 +23,7 @@ void platform_init() {
     SerialUSB.println("");
     SerialUSB.println("");
 
-    log_init();
+    LOG_INIT();
     for(int i = 0; i < 6; i++) {
         g_status_stack.add(PlatformStatus::STATUS_OK);
     }
@@ -33,7 +33,7 @@ void platform_init() {
     }
 
 
-    log("Initializing platform...");
+    LOG("Initializing platform...");
     PLATFORM_IOPLEX.setDigitNum(0x01);
 
     // enable watchdog reboot if not in debug mode

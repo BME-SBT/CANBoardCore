@@ -18,6 +18,7 @@ struct CAN_Stat {
     u32 irq_handled;
     u64 tx_byte_count;
     u64 rx_byte_count;
+    u64 tx_req_byte_count;
 };
 
 extern CAN_Stat g_can_stat;
