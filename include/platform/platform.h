@@ -6,6 +6,7 @@
 #include "../lib/inttypes.h"
 #include "../lib/utils.h"
 #include "status.h"
+#include "measurement/measurments.h"
 
 
 /*
@@ -27,6 +28,7 @@
 #define PLATFORM_WATCHDOG_TIMEOUT_MS 100
 
 extern CAN PLATFORM_CAN;
+extern Measurements PLATFORM_MEASUREMENTS;
 
 void platform_init();
 void platform_set_status(PlatformStatus status);

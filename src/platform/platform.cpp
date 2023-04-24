@@ -8,7 +8,8 @@
  * Hardware driver instances
  */
 CAN PLATFORM_CAN;
-IOPlexDriver PLATFORM_IOPLEX(pio0, 0, 6, 15);
+Measurements PLATFORM_MEASUREMENTS;
+
 
 /**
  * Initialize all platform things

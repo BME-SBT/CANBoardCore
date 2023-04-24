@@ -106,6 +106,12 @@ static void mcp251x_hw_rx_frame(Priv *priv, u8 *buf, int rxb) {
     len = can_cc_dlc2len(buf[RXBDLC_OFF] & RXBDLC_LEN_MASK);
     for (; i < (RXBDAT_OFF + len); i++)
         buf[i] = mcp251x_read_reg(priv, RXBCTRL(rxb) + i);
+
+    IRQ_LOGF("packet: %d", len);
+    for(i = 1; i < RXBDAT_OFF + len; i++) {
+        IRQ_LOGF("%x", buf[i]);
+    }
+    IRQ_LOG("\r\n");
 }
 
 static void mcp251x_hw_rx(Priv *priv, int rxb) {
@@ -182,129 +188,145 @@ static void mcp251x_hw_tx(Priv *priv, const CAN_Frame &frame, int txb) {
     mcp251x_spi_write(priv, 1);
 }
 
+
+bool mcp251x_tx_busy(Priv *priv) {
+    return priv->tx_busy[0] && priv->tx_busy[1] && priv->tx_busy[2];
+}
+
+
+void mcp251x_check_interrupt(Priv *priv) {
+    // no need to lock, we are already own the device
+    // we do the same thing as the IRQ handler so no problem
+    // with blocking it
+
+    // loop until no interrupts happen
+    while (true) {
+        u8 int_flag, error_flag;
+        int_flag = mcp251x_read_reg(priv, CANINTF);
+        error_flag = mcp251x_read_reg(priv, EFLG);
+
+        u8 int_clear = 0;
+        // nothing to handle
+        if (!int_flag) {
+            break;
+        }
+
+        if (int_flag & CANINTF_RX0IF) {
+            // got a packet in rx 0
+            // read and process packet
+            mcp251x_hw_rx(priv, 0);
+            mcp251x_write_bits(priv, CANINTF, CANINTF_RX0IF, 0);
+        }
+        // update int flag
+        int_flag = mcp251x_read_reg(priv, CANINTF);
+        if (int_flag & CANINTF_RX1IF) {
+
+            // read and process packet
+            mcp251x_hw_rx(priv, 1);
+            mcp251x_write_bits(priv, CANINTF, CANINTF_RX1IF, 0);
+        }
+
+        int_flag = mcp251x_read_reg(priv, CANINTF);
+        if (int_flag & CANINTF_TX0IF) {
+            // sent packet from txb0
+            priv->tx_busy[0] = false;
+            g_can_stat.txb0_cleared++;
+            mcp251x_write_bits(priv, CANINTF, CANINTF_TX0IF, 0);
+        }
+
+        int_flag = mcp251x_read_reg(priv, CANINTF);
+        if (int_flag & CANINTF_TX1IF) {
+            // sent packet from txb1
+            priv->tx_busy[1] = false;
+            g_can_stat.txb1_cleared++;
+            mcp251x_write_bits(priv, CANINTF, CANINTF_TX1IF, 0);
+        }
+
+        int_flag = mcp251x_read_reg(priv, CANINTF);
+        if (int_flag & CANINTF_TX2IF) {
+            // sent packet from txb2
+            priv->tx_busy[2] = false;
+            g_can_stat.txb2_cleared++;
+            mcp251x_write_bits(priv, CANINTF, CANINTF_TX2IF, 0);
+        }
+
+        if (error_flag & (EFLG_RX0OVR | EFLG_RX1OVR)) {
+            // clear error state
+            int_clear |= CANINTF_ERR;
+            mcp251x_write_bits(priv, EFLG, error_flag, 0);
+            g_can_stat.rx_ov_dropped_frame_count++;
+        }
+        mcp251x_write_bits(priv, CANINTF, int_clear, 0);
+
+        if(!mcp251x_tx_busy(priv)) {
+            CAN_Frame frame{};
+            while(priv->can_tx_queue.pull(&frame)) {
+                if (!priv->tx_busy[0]) {
+                    mcp251x_hw_tx(priv, frame, 0);
+                    priv->tx_busy[0] = true;
+                    g_can_stat.txb0_set++;
+                } else if (!priv->tx_busy[1]) {
+                    mcp251x_hw_tx(priv, frame, 1);
+                    priv->tx_busy[1] = true;
+                    g_can_stat.txb1_set++;
+                } else {
+                    mcp251x_hw_tx(priv, frame, 2);
+                    priv->tx_busy[2] = true;
+                    g_can_stat.txb2_set++;
+                }
+            }
+        }
+    }
+}
+
 int mcp251x_start_tx(Priv *priv, CAN_Frame &frame) {
     // wait for transmit slot
     if (frame.dlc > 8) {
         frame.dlc = 8;
     }
     g_can_stat.tx_req_byte_count += frame.dlc;
-    if (priv->tx1_busy && priv->tx0_busy) {
+
+    if (mcp251x_tx_busy(priv)) {
         if (priv->can_tx_queue.insert(frame)) {
             g_can_stat.tx_queued_frame_count++;
             LOG("frame queued");
             return 0;
         } else {
             g_can_stat.tx_dropped_frame_count++;
-            mcp251x_can_isr(priv);
+
         }
         return 0;
     }
 
-    int txb = priv->tx1_busy ? 0 : 1;
-
     mutex_enter_blocking(&priv->mcp_lock);
-    mcp251x_hw_tx(priv, frame, txb);
-    if (txb == 1) {
-        priv->tx1_busy = true;
+
+    if (!priv->tx_busy[0]) {
+        mcp251x_hw_tx(priv, frame, 0);
+        priv->tx_busy[0] = true;
+        g_can_stat.txb0_set++;
+    } else if (!priv->tx_busy[1]) {
+        mcp251x_hw_tx(priv, frame, 1);
+        priv->tx_busy[1] = true;
+        g_can_stat.txb1_set++;
     } else {
-        priv->tx0_busy = true;
+        mcp251x_hw_tx(priv, frame, 2);
+        priv->tx_busy[2] = true;
+        g_can_stat.txb2_set++;
     }
+    // now we check interrupts
+    mcp251x_check_interrupt(priv);
     mutex_exit(&priv->mcp_lock);
-    mcp251x_can_isr(priv);
     return 0;
 }
 
 static void mcp251x_can_isr(void *device) {
-    uint32_t INTERR = save_and_disable_interrupts();
     g_can_stat.irq_handled++;
     Priv *priv = reinterpret_cast<Priv *>(device);
 
-    IRQ_LOG("CAN interrupt happened");
     if (mutex_try_enter(&priv->mcp_lock, nullptr)) {
         priv->in_irq = true;
-        while (true) {
-            u8 intf, eflag;
 
-            intf = mcp251x_read_reg(priv, CANINTF);
-            IRQ_LOGF("interrupt flag: %x", intf);
-            eflag = mcp251x_read_reg(priv, EFLG);
-            IRQ_LOGF("error flag: %x", eflag);
-            // first, check for messages
-            if (intf & CANINTF_RX0IF) {
-                // message in the first buffer
-                mcp251x_hw_rx(priv, 0);
-
-                // reset INTF
-                mcp251x_write_bits(priv, CANINTF, CANINTF_RX0IF, 0);
-                intf ^= CANINTF_RX0IF;
-                if (!(intf & CANINTF_RX1IF)) {
-                    // reread intf, rx1 could be full now
-                    u8 intf1, eflag1;
-                    // TODO: Combine into single operation
-                    intf1 = mcp251x_read_reg(priv, CANINTF);
-                    eflag1 = mcp251x_read_reg(priv, EFLG);
-
-                    intf |= intf1;
-                    eflag |= eflag1;
-                }
-            }
-
-            if (intf & CANINTF_RX1IF) {
-                mcp251x_hw_rx(priv, 1);
-
-                // reset INTF
-                mcp251x_write_bits(priv, CANINTF, CANINTF_RX1IF, 0);
-                intf ^= CANINTF_RX1IF; // toggle RX1IF off
-            }
-
-            // error handling
-            intf &= CANINTF_TX | CANINTF_ERR;
-
-            if (intf & (CANINTF_TX | CANINTF_ERR)) {
-                // clear tx and err interrupts
-                mcp251x_write_bits(priv, CANINTF, (CANINTF_TX | CANINTF_ERR),
-                                   0);
-            }
-            if (eflag & (EFLG_RX0OVR | EFLG_RX1OVR)) {
-                // clear error state
-                mcp251x_write_bits(priv, EFLG, eflag, 0);
-            }
-
-            // TODO: Handle errors
-
-            // Handle TX
-            if (!intf) {
-                // nothing to handle anymore
-                break;
-            }
-
-            if (intf & CANINTF_TX) {
-                CAN_Frame frame2send;
-                if (intf & CANINTF_TX0IF) {
-                    g_can_stat.tx_sent_frame_count++;
-                    if (priv->can_tx_queue.pull(&frame2send)) {
-                        mcp251x_hw_tx(priv, frame2send, 0);
-                    } else {
-                        priv->tx0_busy = false;
-                    }
-
-                    if (!(intf & CANINTF_TX1IF)) {
-                        // reread intf, intf could be full now
-                        intf = mcp251x_read_reg(priv, CANINTF);
-                    }
-                }
-                if (intf & CANINTF_TX1IF) {
-                    g_can_stat.tx_sent_frame_count++;
-                    if (priv->can_tx_queue.pull(&frame2send)) {
-                        mcp251x_hw_tx(priv, frame2send, 1);
-                    } else {
-                        priv->tx1_busy = false;
-                    }
-                }
-            }
-            mcp251x_write_bits(priv, CANINTF, (CANINTF_TX0IF | CANINTF_TX1IF),
-                               0);
-        }
+        mcp251x_check_interrupt(priv);
 
         mutex_exit(&priv->mcp_lock);
         priv->in_irq = false;
@@ -314,7 +336,6 @@ static void mcp251x_can_isr(void *device) {
         // it later
         g_can_stat.isr_lost_race_count++;
     }
-    restore_interrupts(INTERR);
 }
 
 static PlatformStatus mcp251x_set_bittiming(Priv *priv, int clock_freq,
@@ -379,8 +400,6 @@ Priv *mcp251x_platform_init(int clock_freq, int baudrate, Priv *instance) {
     if (!mutex_is_initialized(&instance->mcp_lock)) {
         *instance = Priv{};
     }
-    instance->tx1_busy = false;
-    instance->tx0_busy = false;
     mutex_init(&instance->mcp_lock);
     memset(instance->spi_tx_buf, 0, SPI_TRANSFER_BUF_LEN);
     memset(instance->spi_rx_buf, 0, SPI_TRANSFER_BUF_LEN);
@@ -413,6 +432,10 @@ Priv *mcp251x_platform_init(int clock_freq, int baudrate, Priv *instance) {
                       RXBCTRL_BUKT | RXBCTRL_RXM0 | RXBCTRL_RXM1);
     mcp251x_write_reg(instance, RXBCTRL(1), RXBCTRL_RXM0 | RXBCTRL_RXM1);
     mcp251x_write_reg(instance, CANINTF, 0);
+
+    mcp251x_write_reg(instance, TXBCTRL(0), 3);
+    mcp251x_write_reg(instance, TXBCTRL(1), 3);
+    mcp251x_write_reg(instance, TXBCTRL(2), 3);
 
     attachInterruptParam(PLATFORM_PIN_CAN_INT, mcp251x_can_isr,
                          PinStatus::FALLING, instance);

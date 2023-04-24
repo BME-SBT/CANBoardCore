@@ -178,14 +178,15 @@ struct Priv {
     mutex_t mcp_lock;
     u8 spi_tx_buf[SPI_TRANSFER_BUF_LEN];
     u8 spi_rx_buf[SPI_TRANSFER_BUF_LEN];
-    bool tx1_busy = false;
-    bool tx0_busy = false;
+    bool tx_busy[3];
     bool in_irq = false;
     UnsafeRingBuffer<CAN_Frame, 32> can_rx_queue;
     CANPriorityQueue can_tx_queue;
 
     Priv(): can_tx_queue(2) {
-
+        tx_busy[0] = false;
+        tx_busy[1] = false;
+        tx_busy[2] = false;
     }
 };
 

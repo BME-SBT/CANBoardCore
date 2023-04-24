@@ -53,116 +53,11 @@ int WRAPPER_FUNC(vprintf)(const char *format, va_list va) {
     return r;
 }
 
-static char error_out[2048];
-static char error_fmtbuf[2048];
 
-extern void mbed_error_printf(const char *fmt, ...);
-void WRAPPER_FUNC(mbed_error_printf)(const char *fmt, ...) {
-    va_list va;
-    va_start(va, fmt);
-    vsnprintf(error_fmtbuf, 2048,fmt,va);
-    strcat(error_fmtbuf, error_out);
-    va_end(va);
-}
-void WRAPPER_FUNC(print_context_info)(mbed_fault_context_t mbed_fault_context);
 void WRAPPER_FUNC(mbed_fault_handler)(
     uint32_t fault_type, const mbed_fault_context_t *mbed_fault_context_in) {
-    error_out[0] = 0;
-
-    /* Need to set the flag to ensure prints do not trigger a "mutex in ISR"
-     * trap if they're first prints since boot and we have to init the I/O
-     * system.
-     */
-    mbed_error_printf("\n++ MbedOS Fault Handler ++\n\nFaultType: ");
-
-    switch (fault_type) {
-    case MEMMANAGE_FAULT_EXCEPTION:
-        mbed_error_printf("MemManageFault");
-        break;
-
-    case BUS_FAULT_EXCEPTION:
-        mbed_error_printf("BusFault");
-        break;
-
-    case USAGE_FAULT_EXCEPTION:
-        mbed_error_printf("UsageFault");
-        break;
-
-    // There is no way we can hit this code without getting an exception, so we
-    // have the default treated like hardfault
-    case HARD_FAULT_EXCEPTION:
-    default:
-        mbed_error_printf("HardFault");
-        break;
-    }
-    mbed_error_printf("\n\nContext:");
-    __wrap_print_context_info(*mbed_fault_context_in);
-
-    mbed_error_printf("\n\n-- MbedOS Fault Handler --\n\n");
-    SerialUSB.println(error_out);
-    while(1);
+    LOGF("we dead: %d", fault_type);
 }
-void WRAPPER_FUNC(print_context_info)(mbed_fault_context_t mbed_fault_context)
-{
-    //Context Regs
-    for (int i = 0; i < 13; i++) {
-        mbed_error_printf("\nR%-4d: %08" PRIX32, i, (&mbed_fault_context.R0_reg)[i]);
-    }
-
-    mbed_error_printf("\nSP   : %08" PRIX32
-                      "\nLR   : %08" PRIX32
-                      "\nPC   : %08" PRIX32
-                      "\nxPSR : %08" PRIX32
-                      "\nPSP  : %08" PRIX32
-                      "\nMSP  : %08" PRIX32, mbed_fault_context.SP_reg, mbed_fault_context.LR_reg, mbed_fault_context.PC_reg,
-                      mbed_fault_context.xPSR, mbed_fault_context.PSP, mbed_fault_context.MSP);
-
-    //Capture CPUID to get core/cpu info
-    mbed_error_printf("\nCPUID: %08" PRIX32, SCB->CPUID);
-
-#if !defined(TARGET_M0) && !defined(TARGET_M0P) && !defined(TARGET_M23)
-    //Capture fault information registers to infer the cause of exception
-    mbed_error_printf("\nHFSR : %08" PRIX32
-                      "\nMMFSR: %08" PRIX32
-                      "\nBFSR : %08" PRIX32
-                      "\nUFSR : %08" PRIX32
-                      "\nDFSR : %08" PRIX32
-                      "\nAFSR : %08" PRIX32  ////Split/Capture CFSR into MMFSR, BFSR, UFSR
-                      , SCB->HFSR, (0xFF & SCB->CFSR), ((0xFF00 & SCB->CFSR) >> 8), ((0xFFFF0000 & SCB->CFSR) >> 16), SCB->DFSR, SCB->AFSR);
-
-    //Print MMFAR only if its valid as indicated by MMFSR
-    if ((0xFF & SCB->CFSR) & 0x80) {
-        mbed_error_printf("\nMMFAR: %08" PRIX32, SCB->MMFAR);
-    }
-    //Print BFAR only if its valid as indicated by BFSR
-    if (((0xFF00 & SCB->CFSR) >> 8) & 0x80) {
-        mbed_error_printf("\nBFAR : %08" PRIX32, SCB->BFAR);
-    }
-#endif
-
-    //Print Mode
-    if (mbed_fault_context.EXC_RETURN & 0x8) {
-        mbed_error_printf("\nMode : Thread");
-        //Print Priv level in Thread mode - We capture CONTROL reg which reflects the privilege.
-        //Note that the CONTROL register captured still reflects the privilege status of the
-        //thread mode eventhough we are in Handler mode by the time we capture it.
-        if (mbed_fault_context.CONTROL & 0x1) {
-            mbed_error_printf("\nPriv : User");
-        } else {
-            mbed_error_printf("\nPriv : Privileged");
-        }
-    } else {
-        mbed_error_printf("\nMode : Handler");
-        mbed_error_printf("\nPriv : Privileged");
-    }
-    //Print Return Stack
-    if (mbed_fault_context.EXC_RETURN & 0x4) {
-        mbed_error_printf("\nStack: PSP");
-    } else {
-        mbed_error_printf("\nStack: MSP");
-    }
-}
-
 }
 /**
  * Global setup code. Runs before user setup.
@@ -219,6 +114,9 @@ void print_can_stats() {
     SerialUSB.print("\trx_dropped_frame_count: ");
     SerialUSB.println(g_can_stat.rx_dropped_frame_count);
 
+    SerialUSB.print("\trx_ov_dropped_frame_count: ");
+    SerialUSB.println(g_can_stat.rx_ov_dropped_frame_count);
+
     SerialUSB.print("\trx_received_frame_count: ");
     SerialUSB.println(g_can_stat.rx_received_frame_count);
 
@@ -244,6 +142,24 @@ void print_can_stats() {
     SerialUSB.print(g_can_stat.rx_byte_count - last_rx_count);
     last_rx_count = g_can_stat.rx_byte_count;
     SerialUSB.println(" bps");
+
+    SerialUSB.print("\ttxb0_set: ");
+    SerialUSB.println(g_can_stat.txb0_set);
+
+    SerialUSB.print("\ttxb0_cleared: ");
+    SerialUSB.println(g_can_stat.txb0_cleared);
+
+    SerialUSB.print("\ttxb1_set: ");
+    SerialUSB.println(g_can_stat.txb1_set);
+
+    SerialUSB.print("\ttxb1_cleared: ");
+    SerialUSB.println(g_can_stat.txb1_cleared);
+
+    SerialUSB.print("\ttxb2_set: ");
+    SerialUSB.println(g_can_stat.txb2_set);
+
+    SerialUSB.print("\ttxb2_cleared: ");
+    SerialUSB.println(g_can_stat.txb2_cleared);
 }
 
 void print_loop_stats() {
@@ -269,8 +185,8 @@ void print_loop_stats() {
     SerialUSB.print(g_stats.postloop_time);
     SerialUSB.println(" us");
 
-    SerialUSB.print("\tirq_per_loop: ");
-    SerialUSB.print(g_stats.irq_per_loop);
+    SerialUSB.print("\tapprox_irq_per_loop: ");
+    SerialUSB.print((double)g_can_stat.irq_handled/(double)g_stats.loop_count);
     SerialUSB.println("");
 
     SerialUSB.print("\tyield_count: ");

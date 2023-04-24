@@ -9,7 +9,8 @@
 #include "lib/ringbuffer.h"
 #include <cstdint>
 
-#define QUEUE_USE_SMART 1
+#define QUEUE_USE_SMART 0
+#define QUEUE_USE_NOOP 1
 
 class CANPriorityQueueRB {
   public:
@@ -32,6 +33,25 @@ class CANPriorityQueueRB {
 
   private:
     UnsafeAllocRingBuffer<CAN_Frame> m_buffer;
+};
+
+class CANPriorityQueueNoop {
+  public:
+    explicit CANPriorityQueueNoop(int size) {
+
+    }
+
+    bool insert(CAN_Frame item) {
+        return false;
+    }
+
+    CAN_Frame *peek() {
+        return nullptr;
+    }
+
+    bool pull(CAN_Frame *dest) {
+        return false;
+    }
 };
 
 class CANPriorityQueueImpl {
@@ -149,6 +169,8 @@ class CANPriorityQueue {
   private:
 #if QUEUE_USE_SMART
     CANPriorityQueueImpl impl;
+#elif QUEUE_USE_NOOP
+    CANPriorityQueueNoop impl;
 #else
     CANPriorityQueueRB impl;
 #endif
