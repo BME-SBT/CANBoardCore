@@ -2,6 +2,7 @@
 #define APP_H
 
 #include "platform/platform.h"
+#include <api/Common.h>
 
 /**
  * Setup the application. Initialize all the required things

@@ -11,26 +11,31 @@
 
 #include "datatypes.h"
 
-
 class Measurement {
 
   public:
-    explicit Measurement(u16 id, int frequency): frequency(frequency), id(id) {
+    explicit Measurement(u16 id, int frequency, DataType *dt): frequency(frequency), id(id), dataType(dt) {
 
     }
 
-    void set_value(u64 val) {
-        this->value = val;
+    template <typename DV>
+    void set_value(DV val) {
+        dataType->set_value(val);
     }
 
+    u8 len() {
+        return dataType->len();
+    }
 
   private:
     template <int HZ>
     friend class Measurements;
 
+    // timing info
     int frequency;
+
     u16 id;
-    u64 value;
+    DataType *dataType;
 };
 
 template <int HZ>
@@ -40,18 +45,23 @@ class Measurements {
         last_tick = micros();
     }
 
-    void add_measurement(Measurement measurement) {
+    void add_measurement(Measurement *measurement) {
         MeasurementHolder holder = {.measurement = measurement, .last_sent = 0};
         m_measurements.push_front(holder);
     }
 
-    void send_frames(CAN &can_driver) {
+    void tick(CAN &can_driver) {
         u64 current_time = micros();
         u64 elapsed = last_tick - current_time;
-        u64 tick_time = 1000000 / HZ;
+        u64 tick_time = 1E6 / HZ;
         if(elapsed > tick_time) {
-            for (const auto &item : m_measurements) {
-                if(item.last_sent + tick_time < )
+            for (auto &meas : m_measurements) {
+                auto gap = 1E6 / meas.measurement->frequency;
+                if(current_time > meas.last_sent + gap) {
+                    CAN_Frame frame = CAN_Frame(meas.measurement->id, meas.measurement->dataType->get_value(), meas.measurement->len());
+                    can_driver.send(frame);
+                    meas.last_sent = micros();
+                }
             }
 
         }
@@ -59,7 +69,7 @@ class Measurements {
 
   private:
     struct MeasurementHolder {
-        Measurement measurement;
+        Measurement *measurement;
         u64 last_sent;
     };
 

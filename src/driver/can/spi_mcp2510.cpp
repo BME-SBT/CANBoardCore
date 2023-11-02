@@ -157,7 +157,7 @@ static void mcp251x_hw_tx_frame(Priv *priv, u8 *buf, int len, int txb) {
     priv->spi_tx_buf[0] = INSTRUCTION_WRITE;
     priv->spi_tx_buf[1] = TXBCTRL(txb) + TXBSIDH_OFF;
 
-    mcp251x_spi_write(priv, TXBDAT_OFF + len);
+    mcp251x_spi_write(priv, TXBDAT_OFF + len + 1);
 }
 
 static void mcp251x_hw_tx(Priv *priv, const CAN_Frame &frame, int txb) {
@@ -368,7 +368,7 @@ static PlatformStatus mcp251x_set_normal_mode(Priv *priv) {
                           CANINTE_TX0IE | CANINTE_RX1IE | CANINTE_RX0IE);
 
     /* Put device into normal mode */
-    mcp251x_write_reg(priv, CANCTRL, CANCTRL_REQOP_LOOPBACK);
+    mcp251x_write_reg(priv, CANCTRL, CANCTRL_REQOP_NORMAL);
 
     // set normalmode
     u8 value = 0;
@@ -377,7 +377,7 @@ static PlatformStatus mcp251x_set_normal_mode(Priv *priv) {
                                                          // can reset, we cannot
                                                          // proceed without CAN
     TRY(read_poll_timeout_blocking(mcp251x_read_stat, value,
-                                   value == CANCTRL_REQOP_LOOPBACK, 1000, 10,
+                                   value == CANCTRL_REQOP_NORMAL, 1000, 10,
                                    priv));
 
     return PlatformStatus::STATUS_OK;

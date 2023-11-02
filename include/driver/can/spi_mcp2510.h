@@ -168,7 +168,7 @@
 #define RXMEID8(n) ((n)*4 + 0x22)
 #define RXMEID0(n) ((n)*4 + 0x23)
 
-#define SPI_TRANSFER_BUF_LEN (6 + 8)
+#define SPI_TRANSFER_BUF_LEN (6 + 8 + 1)
 
 
 /**

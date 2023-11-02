@@ -1,6 +1,6 @@
+#include <Arduino.h>
 #include "platform/platform.h"
 #include "driver/ioplex/ioplex_driver.h"
-#include "lib/performance_timer.h"
 #include "platform/log.h"
 #include <hardware/watchdog.h>
 
@@ -8,7 +8,7 @@
  * Hardware driver instances
  */
 CAN PLATFORM_CAN;
-Measurements PLATFORM_MEASUREMENTS;
+Measurements<100> PLATFORM_MEASUREMENTS;
 
 
 /**
@@ -35,7 +35,7 @@ void platform_init() {
 
 
     LOG("Initializing platform...");
-    PLATFORM_IOPLEX.setDigitNum(0x01);
+    //PLATFORM_IOPLEX.setDigitNum(0x01);
 
     // enable watchdog reboot if not in debug mode
 #ifndef DEBUG
@@ -45,7 +45,9 @@ void platform_init() {
 #endif
 }
 
-void platform_preloop() {}
+void platform_preloop() {
+    PLATFORM_MEASUREMENTS.tick(PLATFORM_CAN);
+}
 void platform_postloop() {
     afterirq_log();
 
@@ -72,6 +74,6 @@ void platform_set_status(PlatformStatus status) {
         }
 
         platform_status = status;
-        PLATFORM_IOPLEX.setDigitNum(statuscode(status));
+        //PLATFORM_IOPLEX.setDigitNum(statuscode(status));
     }
 }
